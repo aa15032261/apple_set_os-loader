@@ -1,42 +1,15 @@
 #include <efi.h>
-#include <efilib.h>
-#include <efistdarg.h>
-#include <efidevp.h>
-#include "include/int_guid.h"
-#include "include/int_mem.h"
-#include "include/int_dpath.h"
-#include "include/int_event.h"
+#include "include/int_graphics.h"
 #include "include/int_print.h"
+#include "include/int_event.h"
+#include "include/int_guid.h"
+#include "include/int_dpath.h"
 
 
 #define APPLE_SET_OS_VENDOR  "Apple Inc."
 #define APPLE_SET_OS_VERSION "Mac OS X 10.15"
 
-
-
-VOID _INT_SetGraphicsMode(EFI_BOOT_SERVICES* BS, BOOLEAN Enable){
-    EFI_CONSOLE_CONTROL_PROTOCOL *ConsoleControl = NULL;
-
-    EFI_GUID efi_console_control_protocol_guid = EFI_CONSOLE_CONTROL_PROTOCOL_GUID;
-
-    // get protocols
-    EFI_STATUS Status = BS->LocateProtocol(&efi_console_control_protocol_guid, NULL, (VOID**) &ConsoleControl);
-    if (!EFI_ERROR(Status)) {
-        EFI_CONSOLE_CONTROL_SCREEN_MODE CurrentMode;
-        EFI_CONSOLE_CONTROL_SCREEN_MODE NewMode;
-
-        ConsoleControl->GetMode(ConsoleControl, &CurrentMode, NULL, NULL);
-
-        NewMode = Enable ? EfiConsoleControlScreenGraphics : EfiConsoleControlScreenText;
-        if (CurrentMode != NewMode) {
-            ConsoleControl->SetMode(ConsoleControl, NewMode);
-        }
-    }
-}
-
-
-
-EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 {
     EFI_STATUS Status;
     SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = SystemTable->ConOut;
@@ -170,7 +143,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
 run:
     _INT_IPrint(ConOut, L"Starting bootx64_original.efi...\r\n");
-    for (UINT16 j = 0; j < 2000; j++) {
+    for (UINT16 j = 0; j < 1000; j++) {
         _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
     }
     ConOut->ClearScreen(ConOut);
@@ -190,7 +163,7 @@ halt:
 
 restart:
         _INT_IPrint(ConOut, L"SetOsProtocol is not loaded, restarting...\r\n");
-        for (UINT16 j = 0; j < 5000; j++) {
+        for (UINT16 j = 0; j < 250; j++) {
             _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
         }
         return uefi_call_wrapper(
