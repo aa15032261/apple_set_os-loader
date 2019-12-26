@@ -38,7 +38,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         _INT_IPrint(ConOut, L"SetOsProtocol Buffer Error: %lX\r\n", (UINTN)Status);
         goto restart;
     } else if (handle_count == 0) {
-        _INT_IPrint(ConOut, L"No SetOsProtocol Handles\r\n", (UINTN)Status);
+        _INT_IPrint(ConOut, L"No SetOsProtocol Handles\r\n");
         goto restart;
     } else {
         _INT_IPrint(ConOut, L"SetOsProtocol Handle Count: %d\r\n", (UINTN)handle_count);
