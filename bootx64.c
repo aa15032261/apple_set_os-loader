@@ -166,8 +166,7 @@ restart:
         for (UINT16 j = 0; j < 250; j++) {
             _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
         }
-        return uefi_call_wrapper(
-            SystemTable->RuntimeServices->ResetSystem, 4,
+        return SystemTable->RuntimeServices->ResetSystem(
             EfiResetWarm,
             EFI_SUCCESS,
             sizeof(NULL),
