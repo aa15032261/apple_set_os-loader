@@ -9,7 +9,7 @@
 #define APPLE_SET_OS_VENDOR  "Apple Inc."
 #define APPLE_SET_OS_VERSION "Mac OS X 10.15"
 
-EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
 {
     EFI_STATUS Status;
     SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = SystemTable->ConOut;
@@ -21,7 +21,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     _INT_IPrint(ConOut, L"========== apple_set_os loader v0.2 ==========\r\n");
 
 
-    EFI_HANDLE *handle_buffer;
+    EFI_HANDLE* handle_buffer;
     UINTN handle_count;
 
     _INT_IPrint(ConOut, L"Initializing SetOsProtocol\r\n");
@@ -59,7 +59,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
             } else {
                 if (SetOsIface->Version != 0){
                     _INT_IPrint(ConOut, L"Setting OsVendor\r\n");
-                    Status = SetOsIface->SetOsVendor((CHAR8 *) APPLE_SET_OS_VENDOR);
+                    Status = SetOsIface->SetOsVendor((CHAR8*) APPLE_SET_OS_VENDOR);
                     if (EFI_ERROR(Status)){
                         _INT_IPrint(ConOut, L"OsVendor Error: %lX\r\n", (UINTN)Status);
                     }
@@ -76,7 +76,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
 
 
-    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+    EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
 	EFI_DEVICE_PATH* DevicePath = NULL;
 	EFI_HANDLE DriverHandle;
 
@@ -149,12 +149,12 @@ run:
     ConOut->ClearScreen(ConOut);
     _INT_SetGraphicsMode(SystemTable->BootServices, TRUE);
 
-	// Load was a success - attempt to start the driver
-	Status = SystemTable->BootServices->StartImage(DriverHandle, NULL, NULL);
-	if (EFI_ERROR(Status)) {
+    // Load was a success - attempt to start the driver
+    Status = SystemTable->BootServices->StartImage(DriverHandle, NULL, NULL);
+    if (EFI_ERROR(Status)) {
         _INT_IPrint(ConOut, L"Unable to start bootx64_original.efi.\r\n");
-		goto halt;
-	}
+        goto halt;
+    }
 
 halt:
     while (1) { }
