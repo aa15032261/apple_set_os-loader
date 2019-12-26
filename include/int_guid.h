@@ -4,12 +4,8 @@
 #include <efidef.h>
 #include <efiprot.h>
 
-static EFI_GUID efi_loaded_image_protocol_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
-static EFI_GUID efi_device_path_protocol_guid = EFI_DEVICE_PATH_PROTOCOL_GUID;
-
-
-
-static EFI_GUID efi_console_control_protocol_guid = { 0xf42f7782, 0x12e, 0x4c12, {0x99, 0x56, 0x49, 0xf9, 0x43, 0x4, 0xf7, 0x21} };
+#define EFI_CONSOLE_CONTROL_PROTOCOL_GUID { 0xf42f7782, 0x12e, 0x4c12, {0x99, 0x56, 0x49, 0xf9, 0x43, 0x4, 0xf7, 0x21} };
+#define APPLE_SET_OS_GUID { 0xc5c5da95, 0x7d5c, 0x45e6, { 0xb2, 0xf1, 0x3f, 0xd5, 0x2b, 0xb1, 0x00, 0x77 }};
 
 typedef enum {
     EfiConsoleControlScreenText,
@@ -41,10 +37,6 @@ struct _EFI_CONSOLE_CONTROL_PROTOCOL {
     EFI_CONSOLE_CONTROL_PROTOCOL_SET_MODE           SetMode;
     EFI_CONSOLE_CONTROL_PROTOCOL_LOCK_STD_IN        LockStdIn;
 };
-
-
-
-static EFI_GUID apple_set_os_guid = { 0xc5c5da95, 0x7d5c, 0x45e6, { 0xb2, 0xf1, 0x3f, 0xd5, 0x2b, 0xb1, 0x00, 0x77 }};
 
 typedef struct EFI_APPLE_SET_OS_IFACE {
     UINT64 Version;

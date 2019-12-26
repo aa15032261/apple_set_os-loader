@@ -150,7 +150,7 @@ UINTN __INT_IPrint (
     PRINT_STATE     ps;
     UINTN            back;
 
-    _INT_memset((CHAR8*)&ps, 0, sizeof(ps));
+    _INT_memset(&ps, 0, sizeof(ps));
     ps.Context = Out;
     ps.Output  = (INTN (EFIAPI *)(VOID *, CHAR16 *)) Out->OutputString;
     ps.SetAttr = (INTN (EFIAPI *)(VOID *, UINTN))  Out->SetAttribute;

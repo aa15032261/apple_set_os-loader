@@ -17,6 +17,8 @@
 VOID _INT_SetGraphicsMode(EFI_BOOT_SERVICES* BS, BOOLEAN Enable){
     EFI_CONSOLE_CONTROL_PROTOCOL *ConsoleControl = NULL;
 
+    EFI_GUID efi_console_control_protocol_guid = EFI_CONSOLE_CONTROL_PROTOCOL_GUID;
+
     // get protocols
     EFI_STATUS Status = BS->LocateProtocol(&efi_console_control_protocol_guid, NULL, (VOID**) &ConsoleControl);
     if (!EFI_ERROR(Status)) {
@@ -50,6 +52,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     UINTN handle_count;
 
     _INT_IPrint(ConOut, L"Initializing SetOsProtocol\r\n");
+    EFI_GUID apple_set_os_guid = APPLE_SET_OS_GUID;
     Status = SystemTable->BootServices->LocateHandleBuffer(
         ByProtocol, 
         &apple_set_os_guid, 
@@ -102,56 +105,21 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
 
     EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
 	EFI_DEVICE_PATH* DevicePath = NULL;
-    EFI_DEVICE_PATH* ParentDevicePath;
 	EFI_HANDLE DriverHandle;
 
     _INT_IPrint(ConOut, L"Initializing LoadedImageProtocol...\r\n");
+    EFI_GUID efi_loaded_image_protocol_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
     Status = SystemTable->BootServices->HandleProtocol(ImageHandle, &efi_loaded_image_protocol_guid, (VOID**) &LoadedImage);
     if(EFI_ERROR(Status) || LoadedImage == NULL) {
         goto halt;
     }
 
-    _INT_IPrint(ConOut, L"Locating Partition...\r\n");
-    Status = SystemTable->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &efi_device_path_protocol_guid, (VOID*)&ParentDevicePath);
-    if(EFI_ERROR(Status)) {
-        goto halt;
-    }
-
     _INT_IPrint(ConOut, L"Locating bootx64_original.efi...\r\n");
-    {
-        UINTN                   Size;
-        FILEPATH_DEVICE_PATH    *FilePath;
-        EFI_DEVICE_PATH         *Eop;
-        CHAR16*                 FileName = L"\\EFI\\Boot\\bootx64_original.efi\0\0";
-
-        Size = _INT_strlen16((CHAR8*)FileName);
-
-        FilePath = _INT_AllocatePool(SystemTable->BootServices, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
-        _INT_memset((CHAR8*)FilePath, 0, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
-
-        if (FilePath) {
-
-            FilePath->Header.Type = MEDIA_DEVICE_PATH;
-            FilePath->Header.SubType = MEDIA_FILEPATH_DP;
-
-            SetDevicePathNodeLength (&FilePath->Header, Size + SIZE_OF_FILEPATH_DEVICE_PATH);
-            _INT_memcpy((CHAR8*)FilePath->PathName, (CHAR8*)FileName, Size);
-
-            Eop = NextDevicePathNode(&FilePath->Header);
-            SetDevicePathEndNode(Eop);
-
-            //
-            // Append file path to device's device path
-            //
-
-            DevicePath = (EFI_DEVICE_PATH*)FilePath;
-
-            if (ParentDevicePath) {
-                DevicePath = _INT_AppendDevicePath(SystemTable->BootServices, ParentDevicePath, DevicePath);
-                _INT_FreePool(SystemTable->BootServices, FilePath);
-            }
-        }
-    }
+    DevicePath = _INT_FileDevicePath(
+        SystemTable->BootServices, 
+        LoadedImage->DeviceHandle, 
+        L"\\EFI\\Boot\\bootx64_original.efi"
+    );
 
     if (DevicePath == NULL) {
         _INT_IPrint(ConOut, L"Unable to find bootx64_original.efi.\r\n");

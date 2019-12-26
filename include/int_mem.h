@@ -8,10 +8,10 @@ VOID* _INT_AllocatePool(EFI_BOOT_SERVICES* BS, UINTN Size);
 
 VOID _INT_FreePool(EFI_BOOT_SERVICES* BS, VOID *Buffer);
 
-VOID _INT_memcpy(CHAR8* Dst, CHAR8* Src, UINTN Size);
+VOID _INT_memcpy(VOID* Dst, VOID* Src, UINTN Size);
 
-VOID _INT_memset(CHAR8* Dst, CHAR8 Val, UINTN Size);
+VOID _INT_memset(VOID* Dst, CHAR8 Val, UINTN Size);
 
-UINTN _INT_strlen16(CHAR8* str);
+UINTN _INT_wcslen(CHAR16* str);
 
 #endif
