@@ -1,0 +1,235 @@
+#include <efi.h>
+#include <efilib.h>
+#include <efistdarg.h>
+#include <efidevp.h>
+#include "include/int_guid.h"
+#include "include/int_mem.h"
+#include "include/int_dpath.h"
+#include "include/int_event.h"
+#include "include/int_print.h"
+
+
+#define APPLE_SET_OS_VENDOR  "Apple Inc."
+#define APPLE_SET_OS_VERSION "Mac OS X 10.15"
+
+
+
+VOID _INT_SetGraphicsMode(EFI_BOOT_SERVICES* BS, BOOLEAN Enable){
+    EFI_CONSOLE_CONTROL_PROTOCOL *ConsoleControl = NULL;
+
+    // get protocols
+    EFI_STATUS Status = BS->LocateProtocol(&efi_console_control_protocol_guid, NULL, (VOID**) &ConsoleControl);
+    if (!EFI_ERROR(Status)) {
+        EFI_CONSOLE_CONTROL_SCREEN_MODE CurrentMode;
+        EFI_CONSOLE_CONTROL_SCREEN_MODE NewMode;
+
+        ConsoleControl->GetMode(ConsoleControl, &CurrentMode, NULL, NULL);
+
+        NewMode = Enable ? EfiConsoleControlScreenGraphics : EfiConsoleControlScreenText;
+        if (CurrentMode != NewMode) {
+            ConsoleControl->SetMode(ConsoleControl, NewMode);
+        }
+    }
+}
+
+
+
+EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+{
+    EFI_STATUS Status;
+    SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = SystemTable->ConOut;
+    SIMPLE_INPUT_INTERFACE* ConIn = SystemTable->ConIn;
+
+    _INT_SetGraphicsMode(SystemTable->BootServices, FALSE);
+
+    _INT_Clear(ConOut);
+    _INT_IPrint(ConOut, L"========== apple_set_os loader v0.2 ==========\r\n");
+
+
+    EFI_HANDLE *handle_buffer;
+    UINTN handle_count;
+
+    _INT_IPrint(ConOut, L"Initializing SetOsProtocol\r\n");
+    Status = SystemTable->BootServices->LocateHandleBuffer(
+        ByProtocol, 
+        &apple_set_os_guid, 
+        NULL, 
+        &handle_count,
+        &handle_buffer
+    );
+    
+    if (EFI_ERROR(Status)) {
+        _INT_IPrint(ConOut, L"SetOsProtocol Buffer Error: %lX\r\n", (UINTN)Status);
+        goto restart;
+    } else if (handle_count == 0) {
+        _INT_IPrint(ConOut, L"No SetOsProtocol Handles\r\n", (UINTN)Status);
+        goto restart;
+    } else {
+        _INT_IPrint(ConOut, L"SetOsProtocol Handle Count: %d\r\n", (UINTN)handle_count);
+        for(UINTN i = 0; i < handle_count; i++) {
+            EFI_APPLE_SET_OS_IFACE* SetOsIface = NULL;
+
+            Status = SystemTable->BootServices->OpenProtocol(
+                handle_buffer[i],
+                &apple_set_os_guid,
+                (VOID**)&SetOsIface,
+                ImageHandle,
+                NULL,
+                EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL
+            );
+
+            if (EFI_ERROR(Status)) {
+                _INT_IPrint(ConOut, L"SetOsProtocol Error: %d\r\n", (UINTN)Status);
+            } else {
+                if (SetOsIface->Version != 0){
+                    _INT_IPrint(ConOut, L"Setting OsVendor\r\n");
+                    Status = SetOsIface->SetOsVendor((CHAR8 *) APPLE_SET_OS_VENDOR);
+                    if (EFI_ERROR(Status)){
+                        _INT_IPrint(ConOut, L"OsVendor Error: %lX\r\n", (UINTN)Status);
+                    }
+
+                    _INT_IPrint(ConOut, L"Setting OsVersion\r\n");
+                    Status = SetOsIface->SetOsVersion((CHAR8*) APPLE_SET_OS_VERSION);
+                    if (EFI_ERROR(Status)){
+                        _INT_IPrint(ConOut, L"OsVersion Error: %lX\r\n", (UINTN)Status);
+                    }
+                }
+            }
+        }
+    }
+
+
+
+    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
+	EFI_DEVICE_PATH* DevicePath = NULL;
+    EFI_DEVICE_PATH* ParentDevicePath;
+	EFI_HANDLE DriverHandle;
+
+    _INT_IPrint(ConOut, L"Initializing LoadedImageProtocol...\r\n");
+    Status = SystemTable->BootServices->HandleProtocol(ImageHandle, &efi_loaded_image_protocol_guid, (VOID**) &LoadedImage);
+    if(EFI_ERROR(Status) || LoadedImage == NULL) {
+        goto halt;
+    }
+
+    _INT_IPrint(ConOut, L"Locating Partition...\r\n");
+    Status = SystemTable->BootServices->HandleProtocol(LoadedImage->DeviceHandle, &efi_device_path_protocol_guid, (VOID*)&ParentDevicePath);
+    if(EFI_ERROR(Status)) {
+        goto halt;
+    }
+
+    _INT_IPrint(ConOut, L"Locating bootx64_original.efi...\r\n");
+    {
+        UINTN                   Size;
+        FILEPATH_DEVICE_PATH    *FilePath;
+        EFI_DEVICE_PATH         *Eop;
+        CHAR16*                 FileName = L"\\EFI\\Boot\\bootx64_original.efi\0\0";
+
+        Size = _INT_strlen16((CHAR8*)FileName);
+
+        FilePath = _INT_AllocatePool(SystemTable->BootServices, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
+        _INT_memset((CHAR8*)FilePath, 0, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
+
+        if (FilePath) {
+
+            FilePath->Header.Type = MEDIA_DEVICE_PATH;
+            FilePath->Header.SubType = MEDIA_FILEPATH_DP;
+
+            SetDevicePathNodeLength (&FilePath->Header, Size + SIZE_OF_FILEPATH_DEVICE_PATH);
+            _INT_memcpy((CHAR8*)FilePath->PathName, (CHAR8*)FileName, Size);
+
+            Eop = NextDevicePathNode(&FilePath->Header);
+            SetDevicePathEndNode(Eop);
+
+            //
+            // Append file path to device's device path
+            //
+
+            DevicePath = (EFI_DEVICE_PATH*)FilePath;
+
+            if (ParentDevicePath) {
+                DevicePath = _INT_AppendDevicePath(SystemTable->BootServices, ParentDevicePath, DevicePath);
+                _INT_FreePool(SystemTable->BootServices, FilePath);
+            }
+        }
+    }
+
+    if (DevicePath == NULL) {
+        _INT_IPrint(ConOut, L"Unable to find bootx64_original.efi.\r\n");
+        goto halt;
+	}
+
+
+    _INT_IPrint(ConOut, L"Loading bootx64_original.efi to memory...\r\n");
+    // Attempt to load the driver.
+	Status = SystemTable->BootServices->LoadImage(FALSE, ImageHandle, DevicePath, NULL, 0, &DriverHandle);
+
+    _INT_FreePool(SystemTable->BootServices, DevicePath);
+    DevicePath = NULL;
+
+	if (EFI_ERROR(Status)) {
+        _INT_IPrint(ConOut, L"Unable to load bootx64_original.efi to memory.\r\n");
+		goto halt;
+	}
+
+    _INT_IPrint(ConOut, L"Prepare to run bootx64_original.efi...\r\n");
+
+	Status = SystemTable->BootServices->OpenProtocol(
+        DriverHandle, 
+        &efi_loaded_image_protocol_guid,
+		(VOID**)&LoadedImage, 
+        ImageHandle, 
+        NULL, 
+        EFI_OPEN_PROTOCOL_GET_PROTOCOL
+    );
+	if (EFI_ERROR(Status)) {
+        _INT_IPrint(ConOut, L"Failed to run bootx64_original.efi.\r\n");
+		goto halt;
+	}
+
+    _INT_IPrint(ConOut, L"apple_set_os loaded.\r\nPlug in your eGPU then press any key.\r\n");
+
+    EFI_INPUT_KEY Key;
+
+    for (UINT8 i = 5; i > 0; i--) {
+        _INT_IPrint(ConOut, L"bootx64_original.efi will start in %u second(s)...\r\n", (UINT32)i);
+        for (UINT16 j = 0; j < 1000; j++) {
+            _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
+            if (!EFI_ERROR(ConIn->ReadKeyStroke(ConIn, &Key))) {
+                goto run;
+            }
+        }
+    }
+
+run:
+    _INT_IPrint(ConOut, L"Starting bootx64_original.efi...\r\n");
+    for (UINT16 j = 0; j < 2000; j++) {
+        _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
+    }
+    ConOut->ClearScreen(ConOut);
+    _INT_SetGraphicsMode(SystemTable->BootServices, TRUE);
+
+	// Load was a success - attempt to start the driver
+	Status = SystemTable->BootServices->StartImage(DriverHandle, NULL, NULL);
+	if (EFI_ERROR(Status)) {
+        _INT_IPrint(ConOut, L"Unable to start bootx64_original.efi.\r\n");
+		goto halt;
+	}
+
+halt:
+    while (1) { }
+    
+    return EFI_SUCCESS;
+
+restart:
+        _INT_IPrint(ConOut, L"SetOsProtocol is not loaded, restarting...\r\n");
+        for (UINT16 j = 0; j < 5000; j++) {
+            _INT_WaitForSingleEvent(SystemTable->BootServices, ConIn->WaitForKey, 10000);
+        }
+        return uefi_call_wrapper(
+            SystemTable->RuntimeServices->ResetSystem, 4,
+            EfiResetWarm,
+            EFI_SUCCESS,
+            sizeof(NULL),
+            NULL
+        );
+}
