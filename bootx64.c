@@ -321,10 +321,13 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
     SIMPLE_INPUT_INTERFACE* ConIn = SystemTable->ConIn;
 
     _INT_SetGraphicsMode(BS, FALSE);
-
     _INT_Clear(ConOut);
-    _INT_IPrintAt(ConOut, 0, 0, L"============== apple_set_os loader v0.3 ==============");
+    ConOut->Reset(ConOut, FALSE);
+    ConOut->SetCursorPosition(ConOut, 0, 0);
+    ConOut->EnableCursor(ConOut, FALSE);
+    
 
+    _INT_IPrintAt(ConOut, 0, 0, L"============== apple_set_os loader v0.3 ==============");
 
     EFI_HANDLE* AppleSetOsHandleBuf;
     UINTN AppleSetOsHandleCount;
@@ -382,7 +385,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
 
     _INT_FreePool(BS, AppleSetOsHandleBuf);
 
-    /**/
+    
     _INT_IPrintAt(ConOut, 0, 9, L"Connected Graphics Cards:\t\t\t\t\t");
     PrintGpu(BS, ConOut, ImageHandle);
 

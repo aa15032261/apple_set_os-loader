@@ -22,4 +22,4 @@ bootx64.so: $(OBJS)
 	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .reloc -S --target=$(FORMAT) $^ $@
 
 clean:
-	rm -f $(TARGET) *.so $(OBJS)
+	rm -f *.so $(OBJS)
