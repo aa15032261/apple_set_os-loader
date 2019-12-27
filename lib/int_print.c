@@ -170,8 +170,8 @@ UINTN __INT_IPrint (
 
     va_copy(ps.args, args);
 
-    if (Column != (UINTN) -1) {
-        uefi_call_wrapper(Out->SetCursorPosition, 3, Out, Column, Row);
+    if (Column != (UINTN)-1) {
+        Out->SetCursorPosition(Out, Column, Row);
     }
 
     back = __INT_Print (&ps);

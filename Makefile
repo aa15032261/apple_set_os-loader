@@ -2,7 +2,7 @@ ARCH	= x86_64
 
 TARGET	= bootx64.efi
 FORMAT 	= efi-app-$(ARCH)
-OBJS	= ./lib/int_mem.o ./lib/int_dpath.o ./lib/int_event.o ./lib/int_print.o bootx64.o
+OBJS	= ./lib/int_event.o ./lib/int_graphics.o ./lib/int_mem.o ./lib/int_dpath.o ./lib/int_print.o ./lib/pci_db.o bootx64.o
 
 INC		= /usr/include/efi
 CFLAGS	= -I$(INC) -I$(INC)/$(ARCH) \

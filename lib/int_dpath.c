@@ -165,33 +165,36 @@ EFI_DEVICE_PATH* _INT_FileDevicePath(EFI_BOOT_SERVICES* BS, EFI_HANDLE Device, C
     FILEPATH_DEVICE_PATH    *FilePath;
     EFI_DEVICE_PATH         *Eop, *DevicePath;
 
-    Size = _INT_wcslen(FileName);
-    FilePath = _INT_AllocatePool(BS, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
-    _INT_memset(FilePath, 0, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
-
     DevicePath = NULL;
 
-    if (FilePath) {
+    Size = _INT_wcslen(FileName);
+    FilePath = _INT_AllocatePool(BS, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
 
-        FilePath->Header.Type = MEDIA_DEVICE_PATH;
-        FilePath->Header.SubType = MEDIA_FILEPATH_DP;
+    if (FilePath != NULL) {
+        _INT_memset(FilePath, 0, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
 
-        SetDevicePathNodeLength (&FilePath->Header, Size + SIZE_OF_FILEPATH_DEVICE_PATH);
-        _INT_memcpy(FilePath->PathName, FileName, Size);
+        if (FilePath) {
 
-        Eop = NextDevicePathNode(&FilePath->Header);
-        SetDevicePathEndNode(Eop);
+            FilePath->Header.Type = MEDIA_DEVICE_PATH;
+            FilePath->Header.SubType = MEDIA_FILEPATH_DP;
 
-        DevicePath = (EFI_DEVICE_PATH *) FilePath;
+            SetDevicePathNodeLength (&FilePath->Header, Size + SIZE_OF_FILEPATH_DEVICE_PATH);
+            _INT_memcpy(FilePath->PathName, FileName, Size);
 
-        if (Device) {
-            DevicePath = _INT_AppendDevicePath(
-                BS,
-                _INT_DevicePathFromHandle(BS, Device),
-                DevicePath
-            );
+            Eop = NextDevicePathNode(&FilePath->Header);
+            SetDevicePathEndNode(Eop);
 
-            _INT_FreePool(BS, FilePath);
+            DevicePath = (EFI_DEVICE_PATH *) FilePath;
+
+            if (Device) {
+                DevicePath = _INT_AppendDevicePath(
+                    BS,
+                    _INT_DevicePathFromHandle(BS, Device),
+                    DevicePath
+                );
+
+                _INT_FreePool(BS, FilePath);
+            }
         }
     }
 

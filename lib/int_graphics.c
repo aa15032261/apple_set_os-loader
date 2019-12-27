@@ -3,7 +3,7 @@
 
 VOID _INT_SetGraphicsMode(EFI_BOOT_SERVICES* BS, BOOLEAN Enable)
 {
-    EFI_CONSOLE_CONTROL_PROTOCOL *ConsoleControl = NULL;
+    EFI_CONSOLE_CONTROL_PROTOCOL* ConsoleControl = NULL;
 
     EFI_GUID efi_console_control_protocol_guid = EFI_CONSOLE_CONTROL_PROTOCOL_GUID;
 
@@ -21,3 +21,4 @@ VOID _INT_SetGraphicsMode(EFI_BOOT_SERVICES* BS, BOOLEAN Enable)
         }
     }
 }
+
