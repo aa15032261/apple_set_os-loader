@@ -53,5 +53,5 @@ UINTN _INT_wcslen(CHAR16* str)
 
     for (; str[Size]; Size++);
     
-    return (Size + 1) * sizeof(CHAR16);
+    return Size;
 }

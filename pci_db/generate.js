@@ -87,6 +87,27 @@ readInterface.on('line', function(line) {
     for (let vendor_id in vendors) {
         if (vendors[vendor_id].devices.length > 0) {
             vendor_count++;
+
+            vendors[vendor_id].devices.sort(function (a, b) {
+                if (a.device_id > b.device_id) {
+                    return 1;
+                } else if (a.device_id < b.device_id) {
+                    return -1;
+                } else {
+                    return 0;
+                }
+            });
+
+            let last_device_id = NaN;
+            vendors[vendor_id].devices = vendors[vendor_id].devices.filter(function (a, i) {
+                if (a.device_id === last_device_id) {
+                    return false;
+                } else {
+                    last_device_id = a.device_id;
+                    return true;
+                }
+            });
+            
             pci_vendor_db += ', &pci_' + vendor_id;
     
             let currentSection = 'PCI_VENDOR_DB pci_' + vendor_id + ' = {\r\n';

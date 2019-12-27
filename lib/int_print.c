@@ -55,6 +55,10 @@ typedef struct _pstate {
 
     // Current item being formatted
     struct _pitem  *Item;
+
+    CHAR16      *OutBuffer;
+    UINTN       OutBufferSize;
+    UINTN       OutBufferUsed;
 } PRINT_STATE;
 
 //
@@ -97,15 +101,6 @@ STATIC VOID __INT_PSETATTR (
     IN UINTN             Attr
 );
 
-//
-//
-//
-
-VOID _INT_Clear (
-    IN SIMPLE_TEXT_OUTPUT_INTERFACE    *Out
-) {
-    Out->ClearScreen(Out);
-}
 
 UINTN _INT_IPrint (
     IN SIMPLE_TEXT_OUTPUT_INTERFACE    *Out,
@@ -138,6 +133,51 @@ UINTN _INT_IPrintAt (
     return back;
 }
 
+UINTN _INT_VPoolPrint (
+    IN CHAR16                           *buf,
+    IN UINTN                            size,
+    IN CONST CHAR16                     *fmt,
+    IN va_list                          args
+) {
+    PRINT_STATE     ps;
+    UINTN           back;
+
+    _INT_memset(&ps, 0, sizeof(ps));
+    
+    ps.OutBuffer = buf;
+    ps.OutBufferSize = size;
+    ps.OutBufferUsed = 0;
+
+    if (fmt) {
+        ps.fmt.pw = fmt;
+    } else {
+        ps.fmt.Ascii = TRUE;
+        ps.fmt.pc = NULL;
+    }
+
+    va_copy(ps.args, args);
+    back = __INT_Print (&ps);
+    va_end(ps.args);
+
+    return back;
+}
+
+UINTN _INT_PoolPrint (
+    IN CHAR16                           *buf,
+    IN UINTN                            size,
+    IN CONST CHAR16                     *fmt,
+    ...
+) {
+    va_list          args;
+    UINTN            back;
+
+    va_start(args, fmt);
+    back = _INT_VPoolPrint (buf, size, fmt, args);
+    va_end(args);
+
+    return back;
+}
+
 
 UINTN __INT_IPrint (
     IN UINTN                            Column,
@@ -148,7 +188,7 @@ UINTN __INT_IPrint (
     IN va_list                          args
 ) {
     PRINT_STATE     ps;
-    UINTN            back;
+    UINTN           back;
 
     _INT_memset(&ps, 0, sizeof(ps));
     ps.Context = Out;
@@ -184,7 +224,26 @@ STATIC VOID __INT_PFLUSH (
     IN OUT PRINT_STATE     *ps
 ) {
     *ps->Pos = 0;
-    uefi_call_wrapper(ps->Output, 2, ps->Context, ps->Buffer);
+    if (ps->OutBuffer != NULL) {
+
+        UINTN size = _INT_wcslen(ps->Buffer) * sizeof(CHAR16);
+
+        if (ps->OutBufferUsed + size >= (ps->OutBufferSize - 1)) {
+            size = (ps->OutBufferSize - 1) - ps->OutBufferUsed;
+        }
+
+        _INT_memcpy(
+            (CHAR8*)ps->OutBuffer + ps->OutBufferUsed,
+            ps->Buffer,
+            size
+        );
+
+        ps->OutBufferUsed += size;
+
+        *(CHAR16*)((CHAR8*)ps->OutBuffer + ps->OutBufferUsed + 1) = 0;
+    } else {
+        uefi_call_wrapper(ps->Output, 2, ps->Context, ps->Buffer);
+    }
     ps->Pos = ps->Buffer;
 }
 
@@ -447,11 +506,6 @@ STATIC UINTN __INT_Print (
                     Item.Item.pw = Item.Scratch;
                     break;
 
-                case 't':
-                    TimeToString (Item.Scratch, va_arg(ps->args, EFI_TIME *));
-                    Item.Item.pw = Item.Scratch;
-                    break;
-
                 case 'r':
                     StatusToString (Item.Scratch, va_arg(ps->args, EFI_STATUS));
                     Item.Item.pw = Item.Scratch;
@@ -490,7 +544,7 @@ STATIC UINTN __INT_Print (
 
             // if we have an Item
             if (Item.Item.pw) {
-                __INT_PITEM (ps);
+                __INT_PITEM(ps);
                 break;
             }
 
@@ -508,7 +562,7 @@ STATIC UINTN __INT_Print (
     }
 
     // Flush buffer
-    __INT_PFLUSH (ps);
+    __INT_PFLUSH(ps);
     return ps->Len;
 }
 
@@ -602,7 +656,7 @@ VOID FloatToString (
     /*
      * Decimal point.
      */
-    UINTN x = StrLen(Buffer);
+    UINTN x = _INT_wcslen(Buffer);
     Buffer[x] = L'.';
     x++;
 
@@ -611,16 +665,16 @@ VOID FloatToString (
      * Keep fractional part.
      */
     float f = (float)(v - i);
-    if (f < 0) f = -f;
+    if (f < 0) {
+        f = -f;
+    }
 
 
     /*
      * Leading fractional zeroes.
      */
     f *= 10.0;
-    while (   (f != 0)
-           && ((INTN)f == 0))
-    {
+    while ((f != 0) && ((INTN)f == 0)) {
       Buffer[x] = L'0';
       x++;
       f *= 10.0;
@@ -630,41 +684,10 @@ VOID FloatToString (
     /*
      * Fractional digits.
      */
-    while ((float)(INTN)f != f)
-    {
+    while ((float)(INTN)f != f) {
       f *= 10;
     }
+
     ValueToString(Buffer + x, FALSE, (INTN)f);
     return;
-}
-
-VOID TimeToString (
-    OUT CHAR16      *Buffer,
-    IN EFI_TIME     *Time
-) {
-    UINTN       Hour, Year;
-    CHAR16      AmPm;
-
-    AmPm = 'a';
-    Hour = Time->Hour;
-    if (Time->Hour == 0) {
-        Hour = 12;
-    } else if (Time->Hour >= 12) {
-        AmPm = 'p';
-        if (Time->Hour >= 13) {
-            Hour -= 12;
-        }
-    }
-
-    Year = Time->Year % 100;
-
-    // bugbug: for now just print it any old way
-    SPrint (Buffer, 0, L"%02d/%02d/%02d  %02d:%02d%c",
-        Time->Month,
-        Time->Day,
-        Year,
-        Hour,
-        Time->Minute,
-        AmPm
-        );
 }

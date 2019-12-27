@@ -167,7 +167,7 @@ EFI_DEVICE_PATH* _INT_FileDevicePath(EFI_BOOT_SERVICES* BS, EFI_HANDLE Device, C
 
     DevicePath = NULL;
 
-    Size = _INT_wcslen(FileName);
+    Size = (_INT_wcslen(FileName) + 1) * sizeof(CHAR16);
     FilePath = _INT_AllocatePool(BS, Size + SIZE_OF_FILEPATH_DEVICE_PATH + sizeof(EFI_DEVICE_PATH));
 
     if (FilePath != NULL) {
