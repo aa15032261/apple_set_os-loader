@@ -10,12 +10,6 @@
 #define APPLE_SET_OS_VENDOR  "Apple Inc."
 #define APPLE_SET_OS_VERSION "Mac OS X 10.15"
 
-#define ACPI_ADDRESS_SPACE_TYPE_BUS   0x02
-#define ACPI_END_TAG_DESCRIPTOR       0x79
-
-#define CALC_EFI_PCI_ADDRESS(Bus, Dev, Func, Reg) \
-    ((UINT64) ((((UINTN) Bus) << 24) + (((UINTN) Dev) << 16) + (((UINTN) Func) << 8) + ((UINTN) Reg)))
-
 #pragma pack(1)
 typedef struct {
   UINT8   Desc;
@@ -93,240 +87,120 @@ typedef struct {
 #pragma pack(0)
 
 
-EFI_STATUS PciGetProtocolAndResource (
-    IN  EFI_BOOT_SERVICES*                    BS,
-    IN  EFI_HANDLE                            ImageHandle,
-    IN  EFI_HANDLE                            Handle,
-    OUT EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL**     IoDev,
-    OUT EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR**   Descriptors
-) {
-    EFI_STATUS  Status;
-    EFI_GUID efi_pci_root_bridge_io_guid = EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID;
-
-    Status = BS->OpenProtocol (
-        Handle,
-        &efi_pci_root_bridge_io_guid,
-        (VOID**)IoDev,
-        ImageHandle,
-        NULL,
-        EFI_OPEN_PROTOCOL_GET_PROTOCOL
-    );
-
-    if (!EFI_ERROR (Status)) {
-        
-        Status = (*IoDev)->Configuration(*IoDev, (VOID**)Descriptors);
-        if (Status == EFI_UNSUPPORTED) {
-            *Descriptors = NULL;
-        }
-    }
-
-    return Status;
-}
-
-EFI_STATUS PciGetNextBusRange (
-    IN OUT EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR  **Descriptors,
-    OUT    UINT64                             *MinBus,
-    OUT    UINT64                             *MaxBus,
-    OUT    BOOLEAN                            *IsEnd
-) {
-    *IsEnd = FALSE;
-
-    if ((*Descriptors) == NULL) {
-        *MinBus = 0;
-        *MaxBus = PCI_MAX_BUS;
-        return EFI_SUCCESS;
-    }
-
-    while ((*Descriptors)->Desc != ACPI_END_TAG_DESCRIPTOR) {
-        if ((*Descriptors)->ResType == ACPI_ADDRESS_SPACE_TYPE_BUS) {
-        *MinBus = (*Descriptors)->AddrRangeMin;
-        *MaxBus = (*Descriptors)->AddrRangeMax;
-        (*Descriptors)++;
-        return EFI_SUCCESS;
-        }
-
-        (*Descriptors)++;
-    }
-
-    if ((*Descriptors)->Desc == ACPI_END_TAG_DESCRIPTOR) {
-        *IsEnd = TRUE;
-    }
-
-    return EFI_SUCCESS;
-}
-
-
 VOID PrintGpu(EFI_BOOT_SERVICES* BS, _INT_SimpleTextGraphicsStruct* gs, EFI_HANDLE ImageHandle)
 {
     EFI_STATUS Status;
 
-    EFI_GUID efi_pci_root_bridge_io_guid = EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID;
+    EFI_GUID efi_pci_io_guid = EFI_PCI_IO_PROTOCOL_GUID;
 
-    EFI_HANDLE* PciRootBridgeIoHandleBuf;
-    UINTN PciRootBridgeIoHandleCount = 0;
+    EFI_HANDLE* PciIoHandleBuf;
+    UINTN PciIoHandleCount = 0;
 
     Status = BS->LocateHandleBuffer(
         ByProtocol, 
-        &efi_pci_root_bridge_io_guid, 
+        &efi_pci_io_guid, 
         NULL, 
-        &PciRootBridgeIoHandleCount,
-        &PciRootBridgeIoHandleBuf
+        &PciIoHandleCount,
+        &PciIoHandleBuf
     );
 
 
     if (EFI_ERROR(Status)) {
         _INT_SimpleTextGraphicsPrint(
             gs, 0, 10, FALSE, TRUE,
-            L"PciRootBridgeIo Buffer Error: %lX", Status
+            L"PciIo Buffer Error: %lX", Status
         );
-    } else if (PciRootBridgeIoHandleCount == 0) {
+    } else if (PciIoHandleCount == 0) {
         _INT_SimpleTextGraphicsPrint(
             gs, 0, 10, FALSE, TRUE,
-            L"No PciRootBridgeIo Handles"
+            L"No PciIo Handles"
         );
     } else {
-        _INT_SimpleTextGraphicsPrint(
-            gs, 0, 10, FALSE, FALSE,
-            L"PciRootBridgeIo handle Count: %d", PciRootBridgeIoHandleCount
-        );
+        
+        UINT16 NumOfGpu = 0;
 
-        EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL*    IoDev;
-        EFI_ACPI_ADDRESS_SPACE_DESCRIPTOR*  Descriptors;
-        UINT64                              MinBus;
-        UINT64                              MaxBus;
-        BOOLEAN                             IsEnd;
-        UINT64                              Address;
-        PCI_CONFIG_SPACE                    ConfigSpace;
-        //PCI_DEVICE_HEADER                   *DeviceHeader;
-        PCI_COMMON_HEADER                   PciHeader;
-        UINT16                              NumOfGpu;
+        for (UINTN i = 0; i < PciIoHandleCount; i++) {
+            EFI_PCI_IO_PROTOCOL* PciIo;
 
-        NumOfGpu = 0;
-
-        for(UINTN i = 0; i < PciRootBridgeIoHandleCount; i++) {
-            Status = PciGetProtocolAndResource(
-                BS,
-                ImageHandle,
-                PciRootBridgeIoHandleBuf[i],
-                &IoDev,
-                &Descriptors
+            Status = BS->OpenProtocol(
+                PciIoHandleBuf[i], 
+                &efi_pci_io_guid, 
+                (VOID**)&PciIo, 
+                ImageHandle, 
+                NULL, 
+                EFI_OPEN_PROTOCOL_GET_PROTOCOL
             );
 
-            if (EFI_ERROR(Status)) {
-                _INT_SimpleTextGraphicsPrint(
-                    gs, 0, 10, FALSE, TRUE,
-                    L"PciGetProtocolAndResource Error: %lX", Status
+            if (!EFI_ERROR(Status)) {
+                PCI_COMMON_HEADER PciHeader;
+
+                PciIo->Pci.Read(
+                    PciIo, 
+                    EfiPciIoWidthUint16, 
+                    0, 
+                    1,
+                    &PciHeader.VendorId
                 );
-                continue;
-            }
 
-            while (TRUE) {
-                Status = PciGetNextBusRange(&Descriptors, &MinBus, &MaxBus, &IsEnd);
+                if (PciHeader.VendorId != 0xffff) {
+                    PciIo->Pci.Read(
+                        PciIo, 
+                        EfiPciIoWidthUint32, 
+                        0, 
+                        sizeof(PciHeader) / sizeof(UINT32),
+                        &PciHeader
+                    );
 
-                if (EFI_ERROR(Status)) {
-                    break;
-                }
+                    if (PciHeader.ClassCode[2] == 3) {
+                        CHAR16* VendorStr = L"Unknown";
+                        CHAR16* DeviceStr = L"Unknown";
 
-                if (IsEnd) {
-                    break;
-                }
+                        for (UINT16 vendorIdx = 0; vendorIdx < pci_vendor_db_size; vendorIdx++) {
+                            if (pci_vendor_db[vendorIdx]->vendorId == PciHeader.VendorId) {
+                                VendorStr = pci_vendor_db[vendorIdx]->vendorName;
 
-                for (UINT64 Bus = MinBus; Bus <= MaxBus; Bus++) {
-                    for (UINT16 Device = 0; Device <= PCI_MAX_DEVICE; Device++) {
-                        for (UINT16 Func = 0; Func <= PCI_MAX_FUNC; Func++) {
+                                // binary search
+                                UINT16 minNumOfDevices = 0;
+                                UINT16 maxNumOfDevices = pci_vendor_db[vendorIdx]->numOfDevices - 1;
+        
+                                while (maxNumOfDevices >= minNumOfDevices) {
+                                    UINT32 midNumOfDevices = (maxNumOfDevices + minNumOfDevices) / 2;
 
-                            Address = CALC_EFI_PCI_ADDRESS(Bus, Device, Func, 0);
+                                    if (PciHeader.DeviceId > pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceId) {
+                                        minNumOfDevices = midNumOfDevices + 1;
+                                    } else if (PciHeader.DeviceId < pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceId) {
+                                        maxNumOfDevices = midNumOfDevices - 1 ;
+                                    } else {
+                                        DeviceStr = pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceName;
+                                        break;
+                                    }
+                                }
 
-                            Status = IoDev->Pci.Read(
-                                IoDev,
-                                EfiPciIoWidthUint8,
-                                Address,
-                                sizeof(ConfigSpace),
-                                &ConfigSpace
-                            );
-
-                            //DeviceHeader = (PCI_DEVICE_HEADER*)&(ConfigSpace.NonCommon.Device);
-
-                            Status = IoDev->Pci.Read(
-                                IoDev,
-                                EfiPciIoWidthUint16,
-                                Address,
-                                1,
-                                &PciHeader.VendorId
-                            );
-
-                            if (PciHeader.VendorId == 0xffff && Func == 0) {
                                 break;
                             }
-
-                            if (PciHeader.VendorId != 0xffff) {
-                                Status = IoDev->Pci.Read(
-                                    IoDev,
-                                    EfiPciIoWidthUint32,
-                                    Address,
-                                    sizeof(PciHeader) / sizeof(UINT32),
-                                    &PciHeader
-                                );
-    
-                                if (PciHeader.ClassCode[2] == 3) {
-                                    CHAR16* VendorStr = L"Unknown";
-                                    CHAR16* DeviceStr = L"Unknown";
-
-                                    for (UINT16 vendorIdx = 0; vendorIdx < pci_vendor_db_size; vendorIdx++) {
-                                        if (pci_vendor_db[vendorIdx]->vendorId == PciHeader.VendorId) {
-                                            VendorStr = pci_vendor_db[vendorIdx]->vendorName;
-
-                                            // binary search
-                                            UINT16 minNumOfDevices = 0;
-                                            UINT16 maxNumOfDevices = pci_vendor_db[vendorIdx]->numOfDevices - 1;
-                    
-                                            while (maxNumOfDevices >= minNumOfDevices) {
-                                                UINT32 midNumOfDevices = (maxNumOfDevices + minNumOfDevices) / 2;
-
-                                                if (PciHeader.DeviceId > pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceId) {
-                                                    minNumOfDevices = midNumOfDevices + 1;
-                                                } else if (PciHeader.DeviceId < pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceId) {
-                                                    maxNumOfDevices = midNumOfDevices - 1 ;
-                                                } else {
-                                                    DeviceStr = pci_vendor_db[vendorIdx]->devices[midNumOfDevices].deviceName;
-                                                    break;
-                                                }
-                                            }
-
-                                            break;
-                                        }
-                                    }
-
-                                    _INT_SimpleTextGraphicsPrint(
-                                        gs, 0, 10 + NumOfGpu, TRUE, FALSE,
-                                        L"%04x %04x %s - %s", PciHeader.VendorId, PciHeader.DeviceId, VendorStr, DeviceStr
-                                    );
-
-                                    NumOfGpu++;
-                                }
-
-                                if (Func == 0 &&
-                                    ((PciHeader.HeaderType & HEADER_TYPE_MULTI_FUNCTION) == 0x00)) {
-                                    break;
-                                }
-                            }
                         }
+
+                        _INT_SimpleTextGraphicsPrint(
+                            gs, 0, 10 + NumOfGpu, TRUE, FALSE,
+                            L"%04x %04x %s - %s", PciHeader.VendorId, PciHeader.DeviceId, VendorStr, DeviceStr
+                        );
+
+                        NumOfGpu++;
                     }
                 }
             }
         }
 
-        for (int clearIdx = 0; clearIdx < 3; clearIdx++) {
+        for (int clearIdx = 0; clearIdx < 4; clearIdx++) {
             _INT_SimpleTextGraphicsPrint(
                 gs, 0, 10 + NumOfGpu + clearIdx, TRUE, FALSE,
                 L" "
             );
         }
-
         _INT_SimpleTextGraphicsRefresh(gs);
     }
 
-    _INT_FreePool(BS, PciRootBridgeIoHandleBuf);
+    _INT_FreePool(BS, PciIoHandleBuf);
 }
 
 
@@ -349,16 +223,26 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
     _INT_SimpleTextGraphicsInit(&gs);
 
     _INT_SimpleTextGraphicsPrint(
-        &gs, 0, 0, FALSE, TRUE,
-        L"================== apple_set_os loader v0.4 =================="
+        &gs, 0, 0, FALSE, FALSE,
+        L"================== apple_set_os loader v0.5 =================="
     );
     _INT_SimpleTextGraphicsPrint(
-        &gs, 0, 1, FALSE, TRUE,
-        L"Initializing SetOsProtocol"
+        &gs, 0, 1, FALSE, FALSE,
+        L"Initializing AppleSetOsProtocol"
     );
 
+    _INT_SimpleTextGraphicsPrint(
+        &gs, 0, 9, FALSE, TRUE,
+        L"Connected Graphics Cards:"
+    );
+    //update gpu info
+    PrintGpu(BS, &gs, ImageHandle);
+
+
+
+    // get apple_set_os protocol
     EFI_HANDLE* AppleSetOsHandleBuf;
-    UINTN AppleSetOsHandleCount;
+    UINTN AppleSetOsHandleCount = 0;
 
     EFI_GUID apple_set_os_guid = APPLE_SET_OS_GUID;
     Status = BS->LocateHandleBuffer(
@@ -372,80 +256,34 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
     if (EFI_ERROR(Status)) {
         _INT_SimpleTextGraphicsPrint(
             &gs, 0, 1, TRUE, TRUE,
-            L"SetOsProtocol Buffer Error: %lX", Status
+            L"AppleSetOsProtocol Buffer Error: %lX", Status
         );
-        goto restart;
     } else if (AppleSetOsHandleCount == 0) {
         _INT_SimpleTextGraphicsPrint(
             &gs, 0, 1, TRUE, TRUE,
             L"No SetOsProtocol Handles"
         );
-        goto restart;
     } else {
         _INT_SimpleTextGraphicsPrint(
             &gs, 0, 1, TRUE, TRUE,
             L"SetOsProtocol Handle Count: %d", (UINTN)AppleSetOsHandleCount
         );
-
-        for(UINTN i = 0; i < AppleSetOsHandleCount; i++) {
-            EFI_APPLE_SET_OS_IFACE* SetOsIface = NULL;
-
-            Status = BS->OpenProtocol(
-                AppleSetOsHandleBuf[i],
-                &apple_set_os_guid,
-                (VOID**)&SetOsIface,
-                ImageHandle,
-                NULL,
-                EFI_OPEN_PROTOCOL_GET_PROTOCOL
-            );
-
-            if (EFI_ERROR(Status)) {
-                _INT_SimpleTextGraphicsPrint(
-                    &gs, 0, 1, TRUE, TRUE,
-                    L"SetOsProtocol Error: %lX", Status
-                );
-            } else {
-                if (SetOsIface->Version != 0){
-                    _INT_SimpleTextGraphicsPrint(
-                        &gs, 0, 1, TRUE, TRUE,
-                        L"Setting OsVendor"
-                    );
-                    Status = SetOsIface->SetOsVendor((CHAR8*) APPLE_SET_OS_VENDOR);
-                    if (EFI_ERROR(Status)){
-                        _INT_SimpleTextGraphicsPrint(
-                            &gs, 0, 1, TRUE, TRUE,
-                            L"OsVendor Error: %lX", Status
-                        );
-                    }
-
-                    _INT_SimpleTextGraphicsPrint(
-                        &gs, 0, 2, FALSE, TRUE,
-                        L"Setting OsVersion"
-                    );
-                    Status = SetOsIface->SetOsVersion((CHAR8*) APPLE_SET_OS_VERSION);
-                    if (EFI_ERROR(Status)){
-                        _INT_SimpleTextGraphicsPrint(
-                            &gs, 0, 2, TRUE, TRUE,
-                            L"OsVersion Error: %lX", Status
-                        );
-                    }
-                }
-            }
-        }
     }
 
-    _INT_FreePool(BS, AppleSetOsHandleBuf);
+    if (AppleSetOsHandleCount == 0) {
+        _INT_SimpleTextGraphicsPrint(
+            &gs, 0, 2, TRUE, TRUE,
+            L"AppleSetOs will not be loaded."
+        );
+    } else {
+        _INT_SimpleTextGraphicsPrint(
+            &gs, 0, 2, TRUE, TRUE,
+            L"AppleSetOs will be loaded, press Z to disable."
+        );
+    }
 
 
-
-    _INT_SimpleTextGraphicsPrint(
-        &gs, 0, 9, FALSE, TRUE,
-        L"Connected Graphics Cards:"
-    );
-    PrintGpu(BS, &gs, ImageHandle);
-
-
-
+    // find and load bootx64_original.efi
     EFI_LOADED_IMAGE_PROTOCOL* LoadedImage;
 	EFI_DEVICE_PATH* DevicePath = NULL;
 	EFI_HANDLE DriverHandle;
@@ -477,7 +315,6 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
         );
         goto halt;
 	}
-
 
     _INT_SimpleTextGraphicsPrint(
         &gs, 0, 3, TRUE, TRUE,
@@ -517,7 +354,6 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
 		goto halt;
 	}
 
-
     _INT_SimpleTextGraphicsPrint(
         &gs, 0, 3, TRUE, TRUE,
         L" "
@@ -542,43 +378,109 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable)
             L"Booting bootx64_original.efi in %u second(s)", (UINT32)i
         );
 
+        UINT16 MaxCycle = 20;
+
         if (i % 3 == 1) {
+            MaxCycle = 18;
             PrintGpu(BS, &gs, ImageHandle);
-            _INT_WaitForSingleEvent(BS, ConIn->WaitForKey, 5);
+        }
+
+        // refresh screen when idle
+        for (UINT16 j = 0; j < MaxCycle; j++) {
+            // each cycle is about 50ms 
+            _INT_WaitForSingleEvent(BS, ConIn->WaitForKey, 450000);
             if (!EFI_ERROR(ConIn->ReadKeyStroke(ConIn, &Key))) {
-                goto run;
+                // break loop
+                i = 1; j = 20;
             }
+            _INT_SimpleTextGraphicsRefresh(&gs);
+        }
+    }
+
+    // disable apple_set_os if Z pressed
+    if (Key.UnicodeChar == L'z' || Key.UnicodeChar == L'Z') {
+        AppleSetOsHandleCount = 0;
+        _INT_SimpleTextGraphicsPrint(
+            &gs, 0, 2, TRUE, TRUE,
+            L"AppleSetOs will not be loaded."
+        );
+    }
+
+    // load apple_set_os
+    for(UINTN i = 0; i < AppleSetOsHandleCount; i++) {
+        EFI_APPLE_SET_OS_IFACE* SetOsIface = NULL;
+
+        Status = BS->OpenProtocol(
+            AppleSetOsHandleBuf[i],
+            &apple_set_os_guid,
+            (VOID**)&SetOsIface,
+            ImageHandle,
+            NULL,
+            EFI_OPEN_PROTOCOL_GET_PROTOCOL
+        );
+
+        if (EFI_ERROR(Status)) {
+            _INT_SimpleTextGraphicsPrint(
+                &gs, 0, 1, TRUE, TRUE,
+                L"SetOsProtocol Error: %lX", Status
+            );
         } else {
-            for (UINT16 j = 0; j < 20; j++) {
-                _INT_SimpleTextGraphicsRefresh(&gs);
-                _INT_WaitForSingleEvent(BS, ConIn->WaitForKey, 450000);
-                if (!EFI_ERROR(ConIn->ReadKeyStroke(ConIn, &Key))) {
-                    goto run;
+            if (SetOsIface->Version != 0){
+                _INT_SimpleTextGraphicsPrint(
+                    &gs, 0, 1, TRUE, TRUE,
+                    L"Setting OsVendor"
+                );
+                Status = SetOsIface->SetOsVendor((CHAR8*) APPLE_SET_OS_VENDOR);
+                if (EFI_ERROR(Status)){
+                    _INT_SimpleTextGraphicsPrint(
+                        &gs, 0, 1, TRUE, TRUE,
+                        L"OsVendor Error: %lX", Status
+                    );
+                }
+
+                _INT_SimpleTextGraphicsPrint(
+                    &gs, 0, 2, TRUE, TRUE,
+                    L"Setting OsVersion"
+                );
+                Status = SetOsIface->SetOsVersion((CHAR8*) APPLE_SET_OS_VERSION);
+                if (EFI_ERROR(Status)){
+                    _INT_SimpleTextGraphicsPrint(
+                        &gs, 0, 2, TRUE, TRUE,
+                        L"OsVersion Error: %lX", Status
+                    );
                 }
             }
         }
     }
 
-run:
+    _INT_FreePool(BS, AppleSetOsHandleBuf);
+
     _INT_SimpleTextGraphicsPrint(
         &gs, 0, 6, TRUE, TRUE,
         L"Booting bootx64_original.efi..."
     );
-    for (UINT16 j = 0; j < 500; j++) {
-        _INT_WaitForSingleEvent(BS, ConIn->WaitForKey, 10000);
+
+    // short delay
+    for (UINT16 j = 0; j < 150; j++) {
+        BS->Stall(10000);
     }
+
     ConOut->ClearScreen(ConOut);
     _INT_SetGraphicsMode(BS, TRUE);
 
     // Load was a success - attempt to start the driver
     Status = BS->StartImage(DriverHandle, NULL, NULL);
     if (EFI_ERROR(Status)) {
+        _INT_SetGraphicsMode(BS, FALSE);
         _INT_SimpleTextGraphicsPrint(
             &gs, 0, 6, TRUE, TRUE,
             L"Unable to boot bootx64_original.efi"
         );
         goto halt;
     }
+
+    BS->Exit(ImageHandle, EFI_UNSUPPORTED, 0, NULL);
+    return EFI_UNSUPPORTED;
 
 halt:
     while (1) { 
@@ -587,22 +489,8 @@ halt:
             BS->Stall(10000);
         }
     }
-    return EFI_SUCCESS;
 
-restart:
-        _INT_SimpleTextGraphicsPrint(
-            &gs, 0, 4, TRUE, TRUE,
-            L"SetOsProtocol is not loaded, restarting..."
-        );
-        _INT_SimpleTextGraphicsRefresh(&gs);
+    BS->Exit(ImageHandle, EFI_UNSUPPORTED, 0, NULL);
 
-        for (UINT16 j = 0; j < 250; j++) {
-            _INT_WaitForSingleEvent(BS, ConIn->WaitForKey, 10000);
-        }
-        return SystemTable->RuntimeServices->ResetSystem(
-            EfiResetWarm,
-            EFI_SUCCESS,
-            sizeof(NULL),
-            NULL
-        );
+    return EFI_UNSUPPORTED;
 }
