@@ -1,0 +1,29 @@
+name: release
+
+on:
+  release:
+    types: [created]
+
+
+jobs:
+  release:
+    name: "release"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: "Build"
+        run: |
+          apt-get update && apt-get install -y build-essential gnu-efi
+          make
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: false
+          title: "Release"
+          files: |
+            LICENSE.txt
+            apple_set_os_loader.efi
+            
+  
