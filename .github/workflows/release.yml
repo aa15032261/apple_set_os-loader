@@ -13,7 +13,6 @@ jobs:
     steps:
       - name: "Build"
         run: |
-          apt-get update && apt-get install -y build-essential gnu-efi
           make
 
       - uses: "marvinpinto/action-automatic-releases@latest"
