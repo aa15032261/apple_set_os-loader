@@ -12,11 +12,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install dependency
-      run: | 
-        sudo apt-get update
-        sudo apt-get install build-essential gnu-efi
-    
-    - name: make
-      run: make
+      - uses: actions/checkout@v2
+      - name: Install dependency
+        run: | 
+          sudo apt-get update
+          sudo apt-get install build-essential gnu-efi
+
+      - name: make
+        run: | 
+            make
+        
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+            repo_token: "${{ secrets.GITHUB_TOKEN }}"
+            automatic_release_tag: "latest"
+            prerelease: true
+            title: "Release"
+            files: |
+              *.efi
