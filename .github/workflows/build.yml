@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build in Docker
-      run: docker build -t apple_set_os_loader . && mkdir ./build && docker run --rm -it -v ./build:/build apple_set_os_loader
+      run: docker build -t apple_set_os_loader . && mkdir ./build && docker run --rm -v ./build:/build apple_set_os_loader
     - uses: actions/upload-artifact@v4
       with:
         name: release bootx64.efi
